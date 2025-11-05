@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+// import axios from "axios";
+import api from "../api/axios";
 
 export default function MyBookings() {
   const [bookings, setBookings] = useState([]);
@@ -9,7 +10,7 @@ export default function MyBookings() {
   useEffect(() => {
     const fetchBookings = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/bookings");
+        const res = await api.get("/bookings");
         setBookings(res.data);
       } catch (err) {
         console.error(err);

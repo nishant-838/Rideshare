@@ -12,6 +12,7 @@ import {
   Clock,
   CreditCard,
 } from "lucide-react";
+import api from "../api/axios";
 
 /**
  * RenterDashboard.jsx
@@ -103,7 +104,7 @@ export default function RenterDashboard() {
       }
 
       try {
-        const res = await axios.get("http://localhost:5000/api/bikes/available", {
+        const res = await api.get("/bikes/available", {
           params: {
             date: filters.pickupDate,
             startTime: filters.pickupTime,

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import cycleBg from "../images/cycle4.jpeg";
+import api from "../api/axios";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -35,25 +36,22 @@ export default function Register() {
         if (formData[key] !== null) data.append(key, formData[key]);
       });
 
-      const res = await fetch("http://localhost:5000/api/register", {
-        method: "POST",
-        body: data,
+      // ✅ Use Axios instead of fetch
+      const res = await api.post("/register", data, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
 
-      const result = await res.json();
+      alert(`✅ ${res.data.message}`);
 
-      if (res.ok) {
-        alert(`✅ ${result.message}`);
+      // Redirect based on role
+      if (formData.role === "owner") navigate("/login");
+      else navigate("/login");
 
-        // Redirect based on role
-        if (formData.role === "owner") navigate("/owner-dashboard");
-        else navigate("/renter-dashboard");
-      } else {
-        alert(`⚠️ ${result.message}`);
-      }
     } catch (err) {
-      console.error(err);
-      alert("❌ Server error. Please try again later.");
+      console.error("❌ Registration Error:", err);
+      alert(`⚠️ ${err.response?.data?.message || "Server error. Please try again later."}`);
     }
   };
 
@@ -166,7 +164,7 @@ export default function Register() {
             />
           </div>
 
-          {/* License Upload (shown for everyone now) */}
+          {/* License Upload */}
           <div className="flex flex-col md:col-span-2">
             <label className="text-sm font-semibold mb-1">Upload Driving License</label>
             <input

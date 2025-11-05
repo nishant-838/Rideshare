@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import API from "../api/axios"; // ✅ import the Axios instance
 
 export default function Login() {
   const navigate = useNavigate();
@@ -26,31 +27,26 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:5000/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
+      // ✅ Using Axios POST method from api/axios.js
+      const { data } = await API.post("/login", formData);
 
-      const result = await res.json();
       setLoading(false);
+      alert("✅ Login successful!");
+      localStorage.setItem("user", JSON.stringify(data.user));
 
-      if (res.ok) {
-        alert("✅ Login successful!");
-        localStorage.setItem("user", JSON.stringify(result.user));
-
-        // Redirect based on role
-        if (formData.role === "owner") {
-          navigate("/owner-dashboard");
-        } else {
-          navigate("/");
-        }
+      // Redirect based on role
+      if (formData.role === "owner") {
+        navigate("/owner-dashboard");
       } else {
-        setError(result.message || "Login failed");
+        navigate("/");
       }
     } catch (err) {
       setLoading(false);
-      setError("❌ Server error. Please try again.");
+      if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else {
+        setError("❌ Server error. Please try again.");
+      }
     }
   };
 
@@ -102,7 +98,7 @@ export default function Login() {
             />
           </div>
 
-          {/* Role Selection */}
+          {/* Role */}
           <div>
             <label className="block text-gray-700 font-medium mb-2">Login As</label>
             <select
@@ -116,14 +112,12 @@ export default function Login() {
             </select>
           </div>
 
-          {/* Error message */}
           {error && (
             <p className="text-red-600 text-center text-sm font-medium">
               {error}
             </p>
           )}
 
-          {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
@@ -133,7 +127,6 @@ export default function Login() {
           </button>
         </form>
 
-        {/* Register link */}
         <div className="text-center mt-6 text-gray-600">
           Don’t have an account?{" "}
           <a

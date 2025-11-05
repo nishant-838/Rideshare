@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import axios from "axios";
+// import axios from "axios";
 import Navbar from "../components/navbar";
 import Footer from "../components/Footer";
 import { motion } from "framer-motion";
 import { Star, Clock, CalendarDays, ArrowLeft } from "lucide-react";
 import cycleBg from "../images/NIT.jpeg";
 import logoBG from "../images/AI.png";
+import api from "../api/axios";
 
 export default function BikeDetails() {
   const { id } = useParams();
@@ -27,7 +28,7 @@ export default function BikeDetails() {
           return;
         }
 
-        const res = await axios.get(`http://localhost:5000/api/bikes/${id}`);
+        const res = await api.get(`/bikes/${id}`);
         setBike(res.data);
 
         // Calculate duration in hours
@@ -52,7 +53,7 @@ export default function BikeDetails() {
       const filters = JSON.parse(localStorage.getItem("searchFilters"));
       if (!filters) return alert("Please select pickup and drop times first!");
 
-      await axios.post("http://localhost:5000/api/bookings", {
+      await api.post("/bookings", {
         renterId,
         bikeId: id,
         date: filters.pickupDate,
