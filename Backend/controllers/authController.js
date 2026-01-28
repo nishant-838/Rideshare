@@ -64,7 +64,7 @@ export const login = asyncHandler(async (req, res) => {
 
   res.json({
     message: "✅ Login successful",
-    token: generateToken(user._id),
+    token: generateToken(user._id), 
     user,
   });
 });

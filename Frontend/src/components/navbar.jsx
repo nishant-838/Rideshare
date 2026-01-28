@@ -17,9 +17,18 @@ export default function Navbar() {
     window.location.reload();
   };
 
+  // Smooth scroll to FAQ section
+  const scrollToFAQ = () => {
+    const faqSection = document.getElementById("faq");
+    if (faqSection) {
+      faqSection.scrollIntoView({ behavior: "smooth" });
+      setMenuOpen(false); // close mobile menu if open
+    }
+  };
+
   return (
-    <nav className="bg-white shadow-md fixed top-0 left-0 w-full z-50">
-      <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+    <nav className="bg-white shadow-md fixed top-0 left-0 w-full z-50 relative">
+      <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between ">
         {/* ---------- LEFT: LOGO + NAV LINKS ---------- */}
         <div className="flex items-center gap-6">
           {/* LOGO */}
@@ -43,13 +52,13 @@ export default function Navbar() {
               </Link>
             </li>
             <li>
-              <Link to="/offers" className="hover:text-blue-600">
-                Offers
+              <Link to="/faq" className="hover:text-blue-600">
+                FAQs
               </Link>
             </li>
             <li>
-              <Link to="/extend" className="hover:text-blue-600">
-                Extend
+              <Link to="/mybookings" className="hover:text-blue-600">
+                Cancel Booking
               </Link>
             </li>
             <li>
@@ -64,7 +73,6 @@ export default function Navbar() {
         <div className="flex items-center gap-4">
           {!user ? (
             <>
-              {/* LOGIN + REGISTER (before login) */}
               <Link
                 to="/login"
                 className="hidden md:block px-4 py-2 text-sm font-medium text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition"
@@ -80,7 +88,6 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              {/* USER AVATAR + NAME (after login) */}
               <div className="relative">
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -134,11 +141,14 @@ export default function Navbar() {
           <Link to="/contact" className="block text-gray-700 hover:text-blue-600">
             Contact Us
           </Link>
-          <Link to="/offers" className="block text-gray-700 hover:text-blue-600">
-            Offers
-          </Link>
-          <Link to="/extend" className="block text-gray-700 hover:text-blue-600">
-            Extend
+          <button
+            onClick={scrollToFAQ}
+            className="block text-gray-700 hover:text-blue-600 text-left w-full"
+          >
+            FAQs
+          </button>
+          <Link to="/mybookings" className="block text-gray-700 hover:text-blue-600">
+            Cancel Booking
           </Link>
           <Link to="/reviews" className="block text-gray-700 hover:text-blue-600">
             Reviews

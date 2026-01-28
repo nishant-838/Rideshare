@@ -12,16 +12,10 @@ export const addBike = async (req, res) => {
       mileage,
       description,
       tags,
+      vehicleType,
     } = req.body;
 
-    if (
-      !ownerId ||
-      !bikeName ||
-      !image ||
-      !pricePerHour ||
-      !mileage ||
-      !description
-    ) {
+    if (!ownerId || !bikeName || !image || !pricePerHour || !mileage || !description) {
       return res.status(400).json({ message: "All required fields must be filled" });
     }
 
@@ -37,7 +31,9 @@ export const addBike = async (req, res) => {
         : typeof tags === "string"
         ? tags.split(",").map((t) => t.trim())
         : [],
+      vehicleType,
       available: true,
+      ratings: [], // initialize ratings array
     });
 
     await bike.save();
@@ -65,7 +61,6 @@ export const getAvailableBikes = async (req, res) => {
     const { date, startTime, endTime } = req.query;
 
     if (!date || !startTime || !endTime) {
-      // If not filtering by date/time, return all available bikes
       const bikes = await Bike.find({ available: true }).populate("ownerId", "name email");
       return res.json(bikes);
     }
@@ -73,14 +68,10 @@ export const getAvailableBikes = async (req, res) => {
     const pickup = new Date(`${date}T${startTime}`);
     const drop = new Date(`${date}T${endTime}`);
 
-    // Find bikes that are already booked
     const bookedBikes = await Booking.find({
-      $or: [
-        { startTime: { $lt: drop }, endTime: { $gt: pickup } } // overlapping
-      ]
+      $or: [{ startTime: { $lt: drop }, endTime: { $gt: pickup } }]
     }).distinct("bikeId");
 
-    // Find bikes that are available and not booked
     const availableBikes = await Bike.find({
       available: true,
       _id: { $nin: bookedBikes },
@@ -111,13 +102,11 @@ export const updateBike = async (req, res) => {
     const { id } = req.params;
     const updateFields = req.body;
 
-    // Normalize tags if string
     if (updateFields.tags && typeof updateFields.tags === "string") {
       updateFields.tags = updateFields.tags.split(",").map((t) => t.trim());
     }
 
     const bike = await Bike.findByIdAndUpdate(id, updateFields, { new: true });
-
     if (!bike) return res.status(404).json({ message: "Bike not found" });
 
     res.json({ message: "✅ Bike updated successfully", bike });
@@ -132,12 +121,72 @@ export const deleteBike = async (req, res) => {
   try {
     const { id } = req.params;
     const bike = await Bike.findByIdAndDelete(id);
-
     if (!bike) return res.status(404).json({ message: "Bike not found" });
 
     res.json({ message: "🗑️ Bike deleted successfully" });
   } catch (error) {
     console.error("DELETE BIKE ERROR:", error);
     res.status(500).json({ message: "❌ Failed to delete bike" });
+  }
+};
+
+// ⭐ Rate a bike (user can rate only if they completed a booking)
+export const rateBike = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rating } = req.body;
+    const userId = req.user._id; // protect middleware sets req.user
+
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ message: "Rating must be between 1 and 5" });
+    }
+
+    // Check if user had a past booking
+    const pastBooking = await Booking.findOne({
+      bikeId: id,
+      renterId: userId,
+      endTime: { $lt: new Date() }
+    });
+
+    if (!pastBooking) {
+      return res.status(403).json({ message: "You can only rate bikes you have ridden" });
+    }
+
+    const bike = await Bike.findById(id);
+    if (!bike) return res.status(404).json({ message: "Bike not found" });
+
+    // Remove previous rating by same user
+    bike.ratings = bike.ratings.filter((r) => r.userId.toString() !== userId.toString());
+
+    // Add new rating
+    bike.ratings.push({ userId, value: rating });
+
+    // Calculate average rating
+    const total = bike.ratings.reduce((sum, r) => sum + r.value, 0);
+    bike.avgRating = total / bike.ratings.length;
+
+    await bike.save();
+
+    res.json({ message: "✅ Rating submitted", avgRating: bike.avgRating });
+  } catch (error) {
+    console.error("RATE BIKE ERROR:", error);
+    res.status(500).json({ message: "❌ Failed to submit rating" });
+  }
+};
+
+// 🔍 Get bike ratings (avg + all ratings)
+export const getBikeRatings = async (req, res) => {
+  try {
+    const bike = await Bike.findById(req.params.id).populate("ratings.userId", "name");
+    if (!bike) return res.status(404).json({ message: "Bike not found" });
+
+    const avgRating = bike.ratings.length
+      ? bike.ratings.reduce((sum, r) => sum + r.value, 0) / bike.ratings.length
+      : 0;
+
+    res.json({ avgRating, ratings: bike.ratings });
+  } catch (error) {
+    console.error("GET BIKE RATINGS ERROR:", error);
+    res.status(500).json({ message: "❌ Failed to fetch ratings" });
   }
 };

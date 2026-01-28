@@ -1,5 +1,5 @@
 import React from "react";
-import bikeIllustration from "../assets/bike-illustration.png"; // ✅ Place your bike image in /src/assets
+import bikeIllustration from "../assets/bike-illustration.png"; //  Place your bike image in /src/assets
 
 export default function ContactUs() {
   return (
@@ -68,7 +68,7 @@ export default function ContactUs() {
 
               <ul className="space-y-4 text-sm md:text-base">
                 <li className="flex items-center gap-3">
-                  <span className="text-yellow-300 text-xl">📍</span>
+                  <span className="text-yellow-300 text-xl"></span>
                   221B Ride Street, Speed City
                 </li>
                 <li className="flex items-center gap-3">
@@ -76,7 +76,7 @@ export default function ContactUs() {
                   +91 98765 43210
                 </li>
                 <li className="flex items-center gap-3">
-                  <span className="text-yellow-300 text-xl">✉️</span>
+                  <span className="text-yellow-300 text-xl"></span>
                   contact@rideon.com
                 </li>
               </ul>

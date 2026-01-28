@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import API from "../api/axios"; // ✅ import the Axios instance
+import API from "../api/axios"; //  import the Axios instance
 
 export default function Login() {
   const navigate = useNavigate();
@@ -27,12 +27,13 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // ✅ Using Axios POST method from api/axios.js
+      //  Using Axios POST method from api/axios.js
       const { data } = await API.post("/login", formData);
 
       setLoading(false);
-      alert("✅ Login successful!");
+      alert(" Login successful!");
       localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("token", data.token);
 
       // Redirect based on role
       if (formData.role === "owner") {
@@ -45,7 +46,7 @@ export default function Login() {
       if (err.response?.data?.message) {
         setError(err.response.data.message);
       } else {
-        setError("❌ Server error. Please try again.");
+        setError("Server error. Please try again.");
       }
     }
   };
@@ -60,7 +61,7 @@ export default function Login() {
     >
       <div className="bg-white bg-opacity-90 shadow-2xl rounded-2xl p-10 w-96 max-w-full backdrop-blur-sm">
         <h2 className="text-3xl font-bold text-center text-gray-800 mb-6">
-          Welcome Back 👋
+          Welcome Back 
         </h2>
         <p className="text-center text-gray-500 mb-8">
           Login to continue your ride with{" "}

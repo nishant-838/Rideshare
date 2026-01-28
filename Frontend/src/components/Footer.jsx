@@ -28,10 +28,10 @@ export default function Footer() {
         >
           <h3 className="text-lg font-semibold text-white mb-4">Quick Links</h3>
           <ul className="space-y-3 text-gray-400">
-            <li><a href="#availability" className="hover:text-cyan-400 transition">Check Availability</a></li>
-            <li><a href="#pricing" className="hover:text-cyan-400 transition">Pricing</a></li>
-            <li><a href="#reviews" className="hover:text-cyan-400 transition">Reviews</a></li>
-            <li><a href="#contact" className="hover:text-cyan-400 transition">Contact Us</a></li>
+            <li><a href="/" className="hover:text-cyan-400 transition">Check Availability</a></li>
+            <li><a href="/faq" className="hover:text-cyan-400 transition">FAQs</a></li>
+            <li><a href="/reviews" className="hover:text-cyan-400 transition">Reviews</a></li>
+            <li><a href="/contact" className="hover:text-cyan-400 transition">Contact Us</a></li>
           </ul>
         </motion.div>
 
@@ -58,7 +58,7 @@ export default function Footer() {
           <h3 className="text-lg font-semibold text-white mb-4">Follow Us</h3>
           <div className="flex gap-5">
             <a href="#" className="hover:text-cyan-400 transition"><Facebook /></a>
-            <a href="#" className="hover:text-cyan-400 transition"><Instagram /></a>
+            <a href="https://www.instagram.com/rideonrent123?igsh=NThhaGh3NWFlZ3hi" className="hover:text-cyan-400 transition"><Instagram /></a>
             <a href="#" className="hover:text-cyan-400 transition"><Twitter /></a>
           </div>
         </motion.div>

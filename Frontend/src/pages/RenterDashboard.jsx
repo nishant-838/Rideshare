@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import { motion } from "framer-motion";
 import {
   Bike,
@@ -14,38 +13,17 @@ import {
 } from "lucide-react";
 import api from "../api/axios";
 
-/**
- * RenterDashboard.jsx
- *
- * Features:
- * - Reads saved pickup/drop filters from localStorage ("searchFilters")
- * - Fetches available bikes from backend, then applies client-side filters (price, type, search)
- * - Shows loading spinner, retry on error, empty state with suggestions
- * - Card UI with image, rating, price, features, estimated total price
- * - Favorites (stored in localStorage "favoriteBikes")
- * - Responsive grid, framer-motion animations, subtle hover effects
- *
- * Notes:
- * - Backend endpoint: GET /api/bikes/available?date=...&startTime=...&endTime=...
- * - `amount` calculations assume `pricePerHour` from API is in rupees/hour
- */
-
 /* ---------- Helpers ---------- */
 
 const parseTimeToMinutes = (timeStr) => {
-  // timeStr expected "HH:MM"
   if (!timeStr) return 0;
   const [hh, mm] = timeStr.split(":").map((s) => parseInt(s, 10));
   return hh * 60 + (mm || 0);
 };
 
 const getDurationHours = (startTime, endTime) => {
-  // returns fractional hours (e.g., 1.5)
   if (!startTime || !endTime) return 0;
-  const s = parseTimeToMinutes(startTime);
-  const e = parseTimeToMinutes(endTime);
-  // if end <= start assume next day
-  let diff = e - s;
+  let diff = parseTimeToMinutes(endTime) - parseTimeToMinutes(startTime);
   if (diff <= 0) diff += 24 * 60;
   return diff / 60;
 };
@@ -57,7 +35,7 @@ const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
 export default function RenterDashboard() {
   const navigate = useNavigate();
 
-  // Read saved filters set in header/previous page
+  /* ---------- State ---------- */
   const stored = JSON.parse(localStorage.getItem("searchFilters")) || {
     pickupDate: "",
     pickupTime: "",
@@ -69,15 +47,17 @@ export default function RenterDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [bikeType, setBikeType] = useState("all"); // all / scooter / gear / electric
-  const [priceRange, setPriceRange] = useState([0, 1000]); // [min, max] in ₹/hr
-  const [sortBy, setSortBy] = useState("recommended"); // recommended / price-asc / price-desc / name
+  const [bikeType, setBikeType] = useState("all");
+  const [priceRange, setPriceRange] = useState([0, 1000]);
+  const [sortBy, setSortBy] = useState("recommended");
   const [favorites, setFavorites] = useState(
     JSON.parse(localStorage.getItem("favoriteBikes") || "[]")
   );
   const [retryTrigger, setRetryTrigger] = useState(0);
 
-  // update local UI when stored filters change externally
+  /* ---------- Effects ---------- */
+
+  // update filters from localStorage externally
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key === "searchFilters") {
@@ -87,10 +67,9 @@ export default function RenterDashboard() {
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // fetch from backend
+  // fetch bikes
   useEffect(() => {
     const fetchAvailableBikes = async () => {
       setLoading(true);
@@ -113,7 +92,6 @@ export default function RenterDashboard() {
           timeout: 10000,
         });
 
-        // Expecting array of bike objects from backend
         setBikes(Array.isArray(res.data) ? res.data : []);
       } catch (err) {
         console.error("Error fetching bikes:", err);
@@ -130,45 +108,48 @@ export default function RenterDashboard() {
     fetchAvailableBikes();
   }, [filters.pickupDate, filters.pickupTime, filters.dropTime, retryTrigger]);
 
-  // Derived: duration in hours
+  /* ---------- Derived ---------- */
+
   const durationHours = useMemo(
     () => getDurationHours(filters.pickupTime, filters.dropTime),
     [filters.pickupTime, filters.dropTime]
   );
 
-  // available types from fetched bikes
+  // dynamic bike types from data
   const bikeTypesFromData = useMemo(() => {
     const set = new Set();
-    bikes.forEach((b) => b.type && set.add(b.type));
+    bikes.forEach((b) => {
+      if (b.vehicleType) set.add(b.vehicleType.toLowerCase());
+    });
     return Array.from(set);
   }, [bikes]);
 
-  // client-side filtering & sorting
+  // filtered & sorted bikes
   const displayedBikes = useMemo(() => {
     const [minP, maxP] = priceRange;
+    const q = query.trim().toLowerCase();
+    const typeFilter = bikeType.toLowerCase();
+
     let arr = bikes.filter((b) => {
       const priceOK = b.pricePerHour >= minP && b.pricePerHour <= maxP;
-      const typeOK = bikeType === "all" || (b.type && b.type === bikeType);
+      const typeOK =
+        typeFilter === "all" ||
+        (b.vehicleType && b.vehicleType.toLowerCase() === typeFilter);
       const queryOK =
-        !query ||
-        (b.bikeName || "")
-          .toLowerCase()
-          .includes(query.trim().toLowerCase()) ||
-        (b.brand || "").toLowerCase().includes(query.trim().toLowerCase());
+        !q ||
+        (b.bikeName && b.bikeName.toLowerCase().includes(q)) ||
+        (b.brand && b.brand.toLowerCase().includes(q));
+
       return priceOK && typeOK && queryOK;
     });
 
-    if (sortBy === "price-asc")
-      arr = arr.sort((a, b) => a.pricePerHour - b.pricePerHour);
-    else if (sortBy === "price-desc")
-      arr = arr.sort((a, b) => b.pricePerHour - a.pricePerHour);
-    else if (sortBy === "name")
-      arr = arr.sort((a, b) =>
-        (a.bikeName || "").localeCompare(b.bikeName || "")
-      );
-    // recommended: maybe sort by rating then price
+    if (sortBy === "price-asc") arr.sort((a, b) => a.pricePerHour - b.pricePerHour);
+    else if (sortBy === "price-desc") arr.sort((a, b) => b.pricePerHour - a.pricePerHour);
+    else if (sortBy === "name") arr.sort((a, b) => (a.bikeName || "").localeCompare(b.bikeName || ""));
     else
-      arr = arr.sort((a, b) => (b.rating || 0) - (a.rating || 0) || a.pricePerHour - b.pricePerHour);
+      arr.sort(
+        (a, b) => (b.rating || 0) - (a.rating || 0) || a.pricePerHour - b.pricePerHour
+      );
 
     return arr;
   }, [bikes, priceRange, bikeType, query, sortBy]);
@@ -176,12 +157,9 @@ export default function RenterDashboard() {
   /* ---------- Handlers ---------- */
 
   const toggleFavorite = (id) => {
-    let next;
-    if (favorites.includes(id)) {
-      next = favorites.filter((f) => f !== id);
-    } else {
-      next = [...favorites, id];
-    }
+    const next = favorites.includes(id)
+      ? favorites.filter((f) => f !== id)
+      : [...favorites, id];
     setFavorites(next);
     localStorage.setItem("favoriteBikes", JSON.stringify(next));
   };
@@ -192,12 +170,11 @@ export default function RenterDashboard() {
   };
 
   const clearAndGoSelect = () => {
-    localStorage.removeItem("searchFilters"); // user wanted to go back and select times
-    window.location.href = "/"; // or use navigate("/")
+    localStorage.removeItem("searchFilters");
+    window.location.href = "/";
   };
 
-  /* ---------- UI ---------- */
-
+  /* ---------- Render ---------- */
   return (
     <div className="min-h-screen bg-linear-to-b from-blue-50 to-white p-6 md:p-10">
       <div className="max-w-7xl mx-auto">
@@ -210,18 +187,15 @@ export default function RenterDashboard() {
             </h1>
             <p className="text-gray-600 mt-1">
               Showing options for{" "}
-              <strong className="text-blue-700">
-                {filters.pickupDate || "—"}
-              </strong>{" "}
+              <strong className="text-blue-700">{filters.pickupDate || "—"}</strong>{" "}
               from{" "}
-              <strong className="text-blue-700">
-                {filters.pickupTime || "—"}
-              </strong>{" "}
+              <strong className="text-blue-700">{filters.pickupTime || "—"}</strong>{" "}
               to{" "}
-              <strong className="text-blue-700">
-                {filters.dropTime || "—"}
-              </strong>{" "}
-              • <span className="inline-flex items-center gap-1"><Clock className="w-4 h-4" /> {durationHours ? `${durationHours.toFixed(2)} hr` : "—"}</span>
+              <strong className="text-blue-700">{filters.dropTime || "—"}</strong> •{" "}
+              <span className="inline-flex items-center gap-1">
+                <Clock className="w-4 h-4" />{" "}
+                {durationHours ? `${durationHours.toFixed(2)} hr` : "—"}
+              </span>
             </p>
           </div>
 
@@ -248,6 +222,7 @@ export default function RenterDashboard() {
         {/* Filters */}
         <div className="bg-white p-4 rounded-xl shadow-sm mb-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Search + Sort */}
             <div className="col-span-1 md:col-span-2 flex items-center gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -270,25 +245,23 @@ export default function RenterDashboard() {
               </select>
             </div>
 
+            {/* Bike type */}
             <div className="col-span-1 md:col-span-1 flex items-center gap-2">
-              <select
-                value={bikeType}
-                onChange={(e) => setBikeType(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2"
-              >
-                <option value="all">All Types</option>
-                {/* common options; also include dynamic ones */}
-                <option value="scooter">Scooter</option>
-                <option value="gear">Gear</option>
-                <option value="electric">Electric</option>
-                {bikeTypesFromData.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
+  <select
+    value={bikeType}
+    onChange={(e) => setBikeType(e.target.value)}
+    className="w-full border border-gray-200 rounded-lg px-3 py-2"
+  >
+    <option value="all">All Types</option>
+    <option value="scooty">Scooty</option>
+    <option value="bike">Bike</option>
+    <option value="sports">Sports</option>
+    <option value="electric">Electric</option>
+  </select>
+</div>
 
+
+            {/* Price range */}
             <div className="col-span-1 md:col-span-1 flex items-center gap-2">
               <div className="w-full">
                 <div className="flex items-center justify-between text-sm text-gray-500 mb-1">
@@ -298,6 +271,7 @@ export default function RenterDashboard() {
                   </span>
                 </div>
 
+                {/* Min */}
                 <div className="flex gap-2 items-center">
                   <input
                     type="number"
@@ -324,7 +298,8 @@ export default function RenterDashboard() {
                   />
                 </div>
 
-                <div className="flex gap-2 mt-2">
+                {/* Max */}
+                <div className="flex gap-2 mt-2 items-center">
                   <input
                     type="number"
                     min={0}
@@ -420,7 +395,6 @@ export default function RenterDashboard() {
               <div className="flex items-center justify-center gap-3">
                 <button
                   onClick={() => {
-                    // widen a bit
                     setPriceRange([0, Math.max(1000, priceRange[1] * 2)]);
                   }}
                   className="bg-green-600 text-white px-4 py-2 rounded-lg"
@@ -441,7 +415,11 @@ export default function RenterDashboard() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {displayedBikes.map((b) => {
               const isFav = favorites.includes(b._id);
-              const estTotal = Math.max(0, Math.round((b.pricePerHour || 0) * durationHours * 100) / 100);
+              const estTotal = Math.max(
+                0,
+                Math.round((b.pricePerHour || 0) * durationHours * 100) / 100
+              );
+
               return (
                 <motion.div
                   key={b._id}
@@ -463,7 +441,9 @@ export default function RenterDashboard() {
                       className="absolute top-3 right-3 bg-white/80 p-2 rounded-full shadow hover:scale-105 transition"
                       title={isFav ? "Remove from favorites" : "Add to favorites"}
                     >
-                      <Heart className={`w-5 h-5 ${isFav ? "text-red-500" : "text-gray-600"}`} />
+                      <Heart
+                        className={`w-5 h-5 ${isFav ? "text-red-500" : "text-gray-600"}`}
+                      />
                     </button>
                   </div>
 
@@ -471,41 +451,30 @@ export default function RenterDashboard() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <h3 className="text-lg font-semibold text-gray-800">{b.bikeName}</h3>
-                        <p className="text-sm text-gray-500">{b.brand || b.type || "Bike"}</p>
+                        <p className="text-sm text-gray-500">{b.brand || b.vehicleType || "Bike"}</p>
                         <div className="flex items-center gap-2 mt-2 text-sm">
                           <div className="inline-flex items-center gap-1 text-yellow-500">
                             <Star className="w-4 h-4" />
                             <span className="font-medium">{(b.rating || 0).toFixed(1)}</span>
                           </div>
                           <span className="text-gray-400">•</span>
-                          <span className="text-gray-500">{b.mileage ? `${b.mileage} kmpl` : "—"}</span>
+                          <span className="text-gray-500">{b.mileage ? `${b.mileage} km/l` : "N/A"}</span>
                         </div>
                       </div>
-
                       <div className="text-right">
-                        <div className="text-xl font-bold text-blue-800">₹{b.pricePerHour}/hr</div>
-                        <div className="text-sm text-gray-500">Est: ₹{estTotal}</div>
+                        <p className="text-blue-700 font-semibold text-lg">
+                          ₹{b.pricePerHour}/hr
+                        </p>
+                        <p className="text-gray-400 text-sm mt-1">Est: ₹{estTotal}</p>
                       </div>
                     </div>
 
-                    <p className="text-sm text-gray-600 mt-3 flex-1">{b.description || b.shortDesc || "Well maintained bike."}</p>
-
-                    <div className="mt-4 flex items-center gap-3">
-                      <button
-                        onClick={() => navigate(`/bike/${b._id}`)}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg flex items-center justify-center gap-2"
-                      >
-                        <CreditCard className="w-4 h-4" /> Book Now
-                      </button>
-
-                      <button
-                        onClick={() => navigate(`/bike/${b._id}`)}
-                        className="w-12 h-12 bg-white border border-gray-200 rounded-lg flex items-center justify-center"
-                        title="View details"
-                      >
-                        <ChevronDown className="w-5 h-5 text-gray-600" />
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => navigate(`/bike/${b._id}`)}
+                      className="mt-4 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition"
+                    >
+                      Book Now
+                    </button>
                   </div>
                 </motion.div>
               );
