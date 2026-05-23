@@ -100,19 +100,52 @@ export const getBikeById = async (req, res) => {
 export const updateBike = async (req, res) => {
   try {
     const { id } = req.params;
+
     const updateFields = req.body;
 
-    if (updateFields.tags && typeof updateFields.tags === "string") {
-      updateFields.tags = updateFields.tags.split(",").map((t) => t.trim());
+    // FIND BIKE
+    const bike = await Bike.findById(id);
+
+    if (!bike) {
+      return res.status(404).json({
+        message: "Bike not found",
+      });
     }
 
-    const bike = await Bike.findByIdAndUpdate(id, updateFields, { new: true });
-    if (!bike) return res.status(404).json({ message: "Bike not found" });
+    // OWNER CHECK
+    if (bike.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        message: "Not authorized to update this bike",
+      });
+    }
 
-    res.json({ message: "✅ Bike updated successfully", bike });
+    // TAG PARSING
+    if (
+      updateFields.tags &&
+      typeof updateFields.tags === "string"
+    ) {
+      updateFields.tags = updateFields.tags
+        .split(",")
+        .map((t) => t.trim());
+    }
+
+    // UPDATE
+    Object.assign(bike, updateFields);
+
+    await bike.save();
+
+    res.json({
+      success: true,
+      message: "Bike updated successfully",
+      bike,
+    });
   } catch (error) {
     console.error("UPDATE BIKE ERROR:", error);
-    res.status(500).json({ message: "❌ Failed to update bike" });
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update bike",
+    });
   }
 };
 
@@ -120,13 +153,35 @@ export const updateBike = async (req, res) => {
 export const deleteBike = async (req, res) => {
   try {
     const { id } = req.params;
-    const bike = await Bike.findByIdAndDelete(id);
-    if (!bike) return res.status(404).json({ message: "Bike not found" });
 
-    res.json({ message: "🗑️ Bike deleted successfully" });
+    const bike = await Bike.findById(id);
+
+    if (!bike) {
+      return res.status(404).json({
+        message: "Bike not found",
+      });
+    }
+
+    // OWNER VALIDATION
+    if (bike.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        message: "Not authorized to delete this bike",
+      });
+    }
+
+    await bike.deleteOne();
+
+    res.json({
+      success: true,
+      message: "Bike deleted successfully",
+    });
   } catch (error) {
     console.error("DELETE BIKE ERROR:", error);
-    res.status(500).json({ message: "❌ Failed to delete bike" });
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete bike",
+    });
   }
 };
 

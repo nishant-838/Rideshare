@@ -1,14 +1,18 @@
-// db.js
-const mongoose = require('mongoose');
+import mongoose from "mongoose";
 
 const connectDB = async () => {
   try {
-    const conn=await mongoose.connect("mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=mongosh+2.5.9");
-    console.log(' MongoDB connected successfully');
+    if (!process.env.MONGO_URI) {
+      throw new Error("MONGO_URI missing in .env");
+    }
+
+    const conn = await mongoose.connect(process.env.MONGO_URI);
+
+    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
   } catch (err) {
-    console.error('MongoDB connection failed:', err.message);
+    console.error("❌ DB Connection Failed:", err.message);
     process.exit(1);
   }
 };
 
-module.exports = connectDB;
+export default connectDB;

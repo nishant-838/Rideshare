@@ -1,18 +1,10 @@
 import express from "express";
-import multer from "multer";
-import path from "path";
 import { register, login } from "../controllers/authController.js";
 import { protect } from "../middlewares/auth.js";
+import upload from "../middlewares/upload.js";
 
 const router = express.Router();
 
-// Multer setup
-const uploadDir = path.join(process.cwd(), "uploads");
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
-});
-const upload = multer({ storage });
 
 //  Register (with file upload)
 router.post(

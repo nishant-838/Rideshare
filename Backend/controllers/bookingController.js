@@ -31,43 +31,98 @@ const sendSMS = async (mobile, message) => {
 // Create Booking
 export const createBooking = async (req, res) => {
   try {
-    const { bikeId, date, startTime, endTime, totalAmount, mobile } = req.body;
-    const renterId = req.user._id; // logged-in user ID
-
-    if (!bikeId || !date || !startTime || !endTime || !totalAmount) {
-      return res.status(400).json({ message: "Missing required fields" });
-    }
-
-    const bike = await Bike.findById(bikeId);
-    if (!bike) {
-      return res.status(404).json({ message: "Bike not found" });
-    }
-
-    const booking = await Booking.create({
+    const {
       bikeId,
-      renterId,
       date,
       startTime,
       endTime,
       totalAmount,
+      mobile,
+    } = req.body;
+
+    const renterId = req.user._id;
+
+    // VALIDATION
+    if (!bikeId || !date || !startTime || !endTime || !totalAmount) {
+      return res.status(400).json({
+        message: "All fields are required",
+      });
+    }
+
+    // FIND BIKE
+    const bike = await Bike.findById(bikeId);
+
+    if (!bike) {
+      return res.status(404).json({
+        message: "Bike not found",
+      });
+    }
+
+    // TIME CONVERSION
+    const pickupTime = new Date(startTime);
+    const dropTime = new Date(endTime);
+
+    // INVALID TIME CHECK
+    if (pickupTime >= dropTime) {
+      return res.status(400).json({
+        message: "End time must be after start time",
+      });
+    }
+
+    // OVERLAPPING BOOKING CHECK
+    const overlappingBooking = await Booking.findOne({
+      bikeId,
+      startTime: { $lt: dropTime },
+      endTime: { $gt: pickupTime },
     });
 
-    // Get mobile from user if not provided
+    if (overlappingBooking) {
+      return res.status(400).json({
+        message: "Bike already booked for selected time slot",
+      });
+    }
+
+    // CREATE BOOKING
+    const booking = await Booking.create({
+      bikeId,
+      renterId,
+      date,
+      startTime: pickupTime,
+      endTime: dropTime,
+      totalAmount,
+    });
+
+    // GET USER MOBILE
     let mobileNumber = mobile;
+
     if (!mobileNumber) {
       const user = await User.findById(renterId);
+
       mobileNumber = user?.mobile;
     }
 
+    // SEND SMS
     if (mobileNumber) {
-      const message = `Your booking for ${bike.bikeName} on ${date} from ${startTime} to ${endTime} is confirmed! Total: ₹${totalAmount}. Enjoy your ride with RideShare 🚴‍♂️`;
+      const message =
+        `Your booking for ${bike.bikeName} on ${date} ` +
+        `from ${startTime} to ${endTime} is confirmed! ` +
+        `Total: ₹${totalAmount}. RideShare 🚴‍♂️`;
+
       await sendSMS(mobileNumber, message);
     }
 
-    res.status(201).json({ message: " Booking successful", booking });
+    res.status(201).json({
+      success: true,
+      message: "Booking successful",
+      booking,
+    });
   } catch (error) {
     console.error("BOOKING ERROR:", error);
-    res.status(500).json({ message: "Failed to create booking" });
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to create booking",
+    });
   }
 };
 

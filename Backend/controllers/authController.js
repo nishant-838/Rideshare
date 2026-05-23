@@ -1,70 +1,120 @@
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
 import asyncHandler from "express-async-handler";
+import validator from "validator";
 
-// 🔐 Generate JWT Token
 const generateToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
-    expiresIn: process.env.TOKEN_EXPIRES_IN || "7d",
-  });
+  return jwt.sign(
+    { id: userId },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: "7d",
+    }
+  );
 };
 
-// 📝 Register Controller
+// REGISTER
 export const register = asyncHandler(async (req, res) => {
-  console.log("Incoming body:", req.body);
-  console.log("Incoming files:", req.files);
-
   const { name, email, mobile, username, password, role } = req.body;
 
-  // Ensure files are uploaded
+  // VALIDATION
+  if (!name || !email || !mobile || !username || !password || !role) {
+    return res.status(400).json({
+      message: "All fields are required",
+    });
+  }
+
+  if (!validator.isEmail(email)) {
+    return res.status(400).json({
+      message: "Invalid email",
+    });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({
+      message: "Password must be at least 6 characters",
+    });
+  }
+
+  // FILE VALIDATION
   if (!req.files?.idCard || !req.files?.license) {
-    return res.status(400).json({ message: "File upload missing" });
+    return res.status(400).json({
+      message: "Required files missing",
+    });
   }
 
-  const existing = await User.findOne({ email });
-  if (existing) {
-    return res.status(400).json({ message: "User already exists" });
+  // EXISTING USER CHECK
+  const existingUser = await User.findOne({
+    $or: [{ email }, { username }],
+  });
+
+  if (existingUser) {
+    return res.status(400).json({
+      message: "User already exists",
+    });
   }
 
-  const idCardPath = req.files.idCard[0].path;
-  const licensePath = req.files.license[0].path;
+  // DEBUG LOGS
+  console.log("FILES:", req.files);
+  console.log("IDCARD:", req.files?.idCard);
+  console.log("LICENSE:", req.files?.license);
 
+  // CREATE USER
   const user = await User.create({
     name,
     email,
     mobile,
     username,
-    password,
+    password, // Note: Make sure your User model has a pre-save hook to hash this!
     role,
-    idCard: idCardPath,
-    license: licensePath,
+    idCard: req.files?.idCard?.[0]?.path || req.files?.idCard?.[0]?.secure_url,
+    license: req.files?.license?.[0]?.path || req.files?.license?.[0]?.secure_url,
   });
 
   res.status(201).json({
-    message: "✅ Registration successful!",
+    success: true,
+    message: "Registration successful",
     token: generateToken(user._id),
     user,
   });
 });
 
-// 🔑 Login Controller
+// LOGIN
 export const login = asyncHandler(async (req, res) => {
-  const { email, password,role } = req.body;
-  const user = await User.findOne({ email, password });
+  const { email, password, role } = req.body;
 
-  if (!user) {
-    return res.status(401).json({ message: "Invalid credentials" });
-  }
-   if (user.role !== role) {
-    return res.status(403).json({
-      message: `Access denied! You are registered as a ${user.role}.`,
+  if (!email || !password || !role) {
+    return res.status(400).json({
+      message: "All fields required",
     });
   }
-  
 
-  res.json({
-    message: "✅ Login successful",
-    token: generateToken(user._id), 
+  const user = await User.findOne({ email });
+
+  if (!user) {
+    return res.status(401).json({
+      message: "Invalid credentials",
+    });
+  }
+
+  const isMatch = await user.matchPassword(password);
+
+  if (!isMatch) {
+    return res.status(401).json({
+      message: "Invalid credentials",
+    });
+  }
+
+  if (user.role !== role) {
+    return res.status(403).json({
+      message: `Access denied! Registered as ${user.role}`,
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "Login successful",
+    token: generateToken(user._id),
     user,
   });
 });
