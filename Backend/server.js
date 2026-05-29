@@ -1,7 +1,7 @@
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
-
+import jwt from "jsonwebtoken";
 // 🔥 FIX: This special syntax imports and runs dotenv immediately BEFORE other imports hoist!
 import "dotenv/config"; 
 
@@ -68,19 +68,40 @@ app.use("/api/reviews", reviewRoutes);
 
 // Middleware to authorize WebSockets using your existing JWT workflow
 io.use((socket, next) => {
-  const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization;
-  
+  const token =
+    socket.handshake.auth?.token ||
+    socket.handshake.headers?.authorization;
+
+  console.log("🔍 Socket Auth:", socket.handshake.auth);
+
   if (!token) {
+    console.log("❌ No token received");
     return next(new Error("Authentication error: No token provided"));
   }
 
   try {
-    const cleanToken = token.startsWith("Bearer ") ? token.split(" ")[1] : token;
-    const decoded = jwt.verify(cleanToken, process.env.JWT_SECRET);
-    socket.userId = decoded.id; // Attach user/admin id to socket session
+    const cleanToken = token.startsWith("Bearer ")
+      ? token.split(" ")[1]
+      : token;
+
+    console.log("🔍 Token received:", cleanToken);
+
+    const decoded = jwt.verify(
+      cleanToken,
+      process.env.JWT_SECRET
+    );
+
+    console.log("✅ Decoded User:", decoded);
+
+    socket.userId = decoded.id;
+
     next();
   } catch (err) {
-    return next(new Error("Authentication error: Invalid token"));
+    console.error("❌ JWT ERROR:", err.message);
+
+    return next(
+      new Error(`Authentication error: ${err.message}`)
+    );
   }
 });
 
