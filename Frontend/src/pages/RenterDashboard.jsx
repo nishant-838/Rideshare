@@ -9,12 +9,12 @@ import {
   ChevronDown,
   RefreshCw,
   Clock,
-  CreditCard,
+  MapPin, // 🔥 Icon added for live map trigger
 } from "lucide-react";
 import api from "../api/axios";
+import CustomerMap from "./CustomerMap"; // 🔥 Import map page component directly
 
 /* ---------- Helpers ---------- */
-
 const parseTimeToMinutes = (timeStr) => {
   if (!timeStr) return 0;
   const [hh, mm] = timeStr.split(":").map((s) => parseInt(s, 10));
@@ -31,7 +31,6 @@ const getDurationHours = (startTime, endTime) => {
 const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
 
 /* ---------- Component ---------- */
-
 export default function RenterDashboard() {
   const navigate = useNavigate();
 
@@ -55,9 +54,11 @@ export default function RenterDashboard() {
   );
   const [retryTrigger, setRetryTrigger] = useState(0);
 
-  /* ---------- Effects ---------- */
+  // 🔥 REAL-TIME STATE: Active track booking capture
+  const [activeRideBooking, setActiveRideBooking] = useState(null);
+  const [showRenterMap, setShowRenterMap] = useState(false);
 
-  // update filters from localStorage externally
+  /* ---------- Effects ---------- */
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key === "searchFilters") {
@@ -69,7 +70,31 @@ export default function RenterDashboard() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // fetch bikes
+  // 🔥 EFFECT: Scrapes database to check if user has an active ride timeline
+  useEffect(() => {
+    const checkActiveRides = async () => {
+      try {
+        const res = await api.get("/bookings");
+        const now = new Date();
+
+        // Detect if any booking's timeline encompasses the current timestamp
+        const currentActiveRide = res.data.find((booking) => {
+          const start = new Date(booking.startTime);
+          const end = new Date(booking.endTime);
+          return start <= now && end >= now;
+        });
+
+        if (currentActiveRide) {
+          setActiveRideBooking(currentActiveRide);
+        }
+      } catch (err) {
+        console.error("Error matching ongoing ride context metrics:", err);
+      }
+    };
+    checkActiveRides();
+  }, [retryTrigger]);
+
+  // Fetch available bikes
   useEffect(() => {
     const fetchAvailableBikes = async () => {
       setLoading(true);
@@ -109,22 +134,11 @@ export default function RenterDashboard() {
   }, [filters.pickupDate, filters.pickupTime, filters.dropTime, retryTrigger]);
 
   /* ---------- Derived ---------- */
-
   const durationHours = useMemo(
     () => getDurationHours(filters.pickupTime, filters.dropTime),
     [filters.pickupTime, filters.dropTime]
   );
 
-  // dynamic bike types from data
-  const bikeTypesFromData = useMemo(() => {
-    const set = new Set();
-    bikes.forEach((b) => {
-      if (b.vehicleType) set.add(b.vehicleType.toLowerCase());
-    });
-    return Array.from(set);
-  }, [bikes]);
-
-  // filtered & sorted bikes
   const displayedBikes = useMemo(() => {
     const [minP, maxP] = priceRange;
     const q = query.trim().toLowerCase();
@@ -146,16 +160,12 @@ export default function RenterDashboard() {
     if (sortBy === "price-asc") arr.sort((a, b) => a.pricePerHour - b.pricePerHour);
     else if (sortBy === "price-desc") arr.sort((a, b) => b.pricePerHour - a.pricePerHour);
     else if (sortBy === "name") arr.sort((a, b) => (a.bikeName || "").localeCompare(b.bikeName || ""));
-    else
-      arr.sort(
-        (a, b) => (b.rating || 0) - (a.rating || 0) || a.pricePerHour - b.pricePerHour
-      );
+    else arr.sort((a, b) => (b.rating || 0) - (a.rating || 0) || a.pricePerHour - b.pricePerHour);
 
     return arr;
   }, [bikes, priceRange, bikeType, query, sortBy]);
 
   /* ---------- Handlers ---------- */
-
   const toggleFavorite = (id) => {
     const next = favorites.includes(id)
       ? favorites.filter((f) => f !== id)
@@ -174,11 +184,45 @@ export default function RenterDashboard() {
     window.location.href = "/";
   };
 
-  /* ---------- Render ---------- */
   return (
     <div className="min-h-screen bg-linear-to-b from-blue-50 to-white p-6 md:p-10">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
+        
+        {/* 🔥 REAL-TIME HUD: COLLAPSIBLE NOTIFICATION CALLOUT BAR */}
+        {activeRideBooking && (
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-5 mb-8 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white/20 rounded-full animate-pulse">
+                <MapPin className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h4 className="text-xl font-bold">Your Booking is Active right now! 🚀</h4>
+                <p className="text-white/80 text-sm mt-0.5">
+                  Trip reservation vehicle context: <strong>{activeRideBooking.bikeId?.bikeName || "Rented Vehicle"}</strong>
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowRenterMap(!showRenterMap)}
+              className="bg-white text-indigo-700 px-6 py-2.5 rounded-xl font-bold shadow-md hover:bg-indigo-50 transition active:scale-95"
+            >
+              {showRenterMap ? "🙈 Hide Tracking Map" : "🗺️ Open Live Ride Map"}
+            </button>
+          </div>
+        )}
+
+        {/* 🔥 RENDER LIVE STUDENT RENT TRACKING SCREEN */}
+        {showRenterMap && activeRideBooking ? (
+          <div className="bg-white p-6 rounded-2xl shadow-xl mb-8 border border-gray-100">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-800">Live Ride Telemetry Stream</h3>
+              <span className="bg-green-100 text-green-700 text-xs px-2.5 py-1 rounded-full font-bold animate-pulse">● Live Connected</span>
+            </div>
+            <CustomerMap />
+          </div>
+        ) : null}
+
+        {/* Main Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div>
             <h1 className="text-4xl md:text-5xl font-extrabold text-blue-800 flex items-center gap-3">
@@ -219,10 +263,9 @@ export default function RenterDashboard() {
           </div>
         </div>
 
-        {/* Filters */}
+        {/* Filters Panel */}
         <div className="bg-white p-4 rounded-xl shadow-sm mb-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Search + Sort */}
             <div className="col-span-1 md:col-span-2 flex items-center gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -245,23 +288,20 @@ export default function RenterDashboard() {
               </select>
             </div>
 
-            {/* Bike type */}
             <div className="col-span-1 md:col-span-1 flex items-center gap-2">
-  <select
-    value={bikeType}
-    onChange={(e) => setBikeType(e.target.value)}
-    className="w-full border border-gray-200 rounded-lg px-3 py-2"
-  >
-    <option value="all">All Types</option>
-    <option value="scooty">Scooty</option>
-    <option value="bike">Bike</option>
-    <option value="sports">Sports</option>
-    <option value="electric">Electric</option>
-  </select>
-</div>
+              <select
+                value={bikeType}
+                onChange={(e) => setBikeType(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2"
+              >
+                <option value="all">All Types</option>
+                <option value="scooty">Scooty</option>
+                <option value="bike">Bike</option>
+                <option value="sports">Sports</option>
+                <option value="electric">Electric</option>
+              </select>
+            </div>
 
-
-            {/* Price range */}
             <div className="col-span-1 md:col-span-1 flex items-center gap-2">
               <div className="w-full">
                 <div className="flex items-center justify-between text-sm text-gray-500 mb-1">
@@ -271,7 +311,6 @@ export default function RenterDashboard() {
                   </span>
                 </div>
 
-                {/* Min */}
                 <div className="flex gap-2 items-center">
                   <input
                     type="number"
@@ -298,7 +337,6 @@ export default function RenterDashboard() {
                   />
                 </div>
 
-                {/* Max */}
                 <div className="flex gap-2 mt-2 items-center">
                   <input
                     type="number"
@@ -329,31 +367,14 @@ export default function RenterDashboard() {
           </div>
         </div>
 
-        {/* Loading / Error / Empty handling */}
+        {/* Loading / Error / Empty States */}
         {loading ? (
           <div className="flex items-center justify-center py-24">
             <div className="text-center">
               <div className="inline-block animate-spin rounded-full p-2">
-                <svg
-                  className="w-12 h-12"
-                  viewBox="0 0 50 50"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <circle
-                    cx="25"
-                    cy="25"
-                    r="20"
-                    stroke="currentColor"
-                    strokeWidth="5"
-                    strokeOpacity="0.2"
-                  />
-                  <path
-                    d="M45 25a20 20 0 0 0-20-20"
-                    stroke="currentColor"
-                    strokeWidth="5"
-                    strokeLinecap="round"
-                  />
+                <svg className="w-12 h-12" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="25" cy="25" r="20" stroke="currentColor" strokeWidth="5" strokeOpacity="0.2" />
+                  <path d="M45 25a20 20 0 0 0-20-20" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
                 </svg>
               </div>
               <p className="mt-3 text-gray-600 text-lg">Loading available bikes...</p>
@@ -363,18 +384,8 @@ export default function RenterDashboard() {
           <div className="bg-white p-6 rounded-xl shadow-sm text-center">
             <p className="text-red-600 font-medium mb-3">{error}</p>
             <div className="flex items-center justify-center gap-3">
-              <button
-                onClick={handleRetry}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg"
-              >
-                Retry
-              </button>
-              <button
-                onClick={clearAndGoSelect}
-                className="bg-white border border-gray-200 px-4 py-2 rounded-lg"
-              >
-                Change Time
-              </button>
+              <button onClick={handleRetry} className="bg-blue-600 text-white px-4 py-2 rounded-lg">Retry</button>
+              <button onClick={clearAndGoSelect} className="bg-white border border-gray-200 px-4 py-2 rounded-lg">Change Time</button>
             </div>
           </div>
         ) : displayedBikes.length === 0 ? (
@@ -386,39 +397,25 @@ export default function RenterDashboard() {
                 className="w-48 mx-auto mb-4"
                 loading="lazy"
               />
-              <h3 className="text-xl font-semibold text-gray-700 mb-2">
-                No bikes found
-              </h3>
-              <p className="text-gray-500 mb-4">
-                Try widening the price range or change the pickup/drop times.
-              </p>
+              <h3 className="text-xl font-semibold text-gray-700 mb-2">No bikes found</h3>
+              <p className="text-gray-500 mb-4">Try widening the price range or change the pickup/drop times.</p>
               <div className="flex items-center justify-center gap-3">
                 <button
-                  onClick={() => {
-                    setPriceRange([0, Math.max(1000, priceRange[1] * 2)]);
-                  }}
+                  onClick={() => setPriceRange([0, Math.max(1000, priceRange[1] * 2)])}
                   className="bg-green-600 text-white px-4 py-2 rounded-lg"
                 >
                   Widen Price Range
                 </button>
-                <button
-                  onClick={clearAndGoSelect}
-                  className="bg-white border border-gray-200 px-4 py-2 rounded-lg"
-                >
-                  Change Times
-                </button>
+                <button onClick={clearAndGoSelect} className="bg-white border border-gray-200 px-4 py-2 rounded-lg">Change Times</button>
               </div>
             </div>
           </div>
         ) : (
-          /* Bikes Grid */
+          /* Bikes Grid Listings */
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {displayedBikes.map((b) => {
               const isFav = favorites.includes(b._id);
-              const estTotal = Math.max(
-                0,
-                Math.round((b.pricePerHour || 0) * durationHours * 100) / 100
-              );
+              const estTotal = Math.max(0, Math.round((b.pricePerHour || 0) * durationHours * 100) / 100);
 
               return (
                 <motion.div
@@ -439,11 +436,8 @@ export default function RenterDashboard() {
                     <button
                       onClick={() => toggleFavorite(b._id)}
                       className="absolute top-3 right-3 bg-white/80 p-2 rounded-full shadow hover:scale-105 transition"
-                      title={isFav ? "Remove from favorites" : "Add to favorites"}
                     >
-                      <Heart
-                        className={`w-5 h-5 ${isFav ? "text-red-500" : "text-gray-600"}`}
-                      />
+                      <Heart className={`w-5 h-5 ${isFav ? "text-red-500" : "text-gray-600"}`} />
                     </button>
                   </div>
 
@@ -462,9 +456,7 @@ export default function RenterDashboard() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-blue-700 font-semibold text-lg">
-                          ₹{b.pricePerHour}/hr
-                        </p>
+                        <p className="text-blue-700 font-semibold text-lg">₹{b.pricePerHour}/hr</p>
                         <p className="text-gray-400 text-sm mt-1">Est: ₹{estTotal}</p>
                       </div>
                     </div>

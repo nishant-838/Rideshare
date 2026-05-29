@@ -12,6 +12,10 @@ import rateLimit from "express-rate-limit";
 import { fileURLToPath } from "url";
 import fs from "fs";
 
+// 🌐 SOCKET.IO INTEGRATION: Import native HTTP and Socket.io modules
+import { createServer } from "http";
+import { Server } from "socket.io";
+
 // Now it is 100% safe to import your local routes
 import authRoutes from "./routes/auth.js";
 import bikeRoutes from "./routes/bikeRoutes.js";
@@ -24,6 +28,19 @@ console.log("🔍 Loaded Mongo URI:", process.env.MONGO_URI);
 console.log("🔍 Loaded Cloudinary Name:", process.env.CLOUDINARY_CLOUD_NAME); 
 
 const app = express();
+
+// 🌐 SOCKET.IO INTEGRATION: Create the HTTP server wrapping our Express app
+const httpServer = createServer(app);
+
+// 🌐 SOCKET.IO INTEGRATION: Initialize Socket.io with dedicated CORS configuration
+const io = new Server(httpServer, {
+  path: "/socket.io/",
+  cors: {
+    origin: [process.env.FRONTEND_URL || "http://localhost:5173"],
+    credentials: true,
+  },
+});
+
 app.use(helmet());
 app.use(morgan("dev"));
 
@@ -35,7 +52,7 @@ app.use(limiter);
 
 app.use(
   cors({
-    origin: ["http://localhost:5173", process.env.FRONTEND_URL], 
+    origin: [process.env.FRONTEND_URL || "http://localhost:5173"], 
     credentials: true,              
   })
 );
@@ -47,10 +64,69 @@ app.use("/api/bookings", bookingRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/reviews", reviewRoutes);
 
+// server.js
+
+// Middleware to authorize WebSockets using your existing JWT workflow
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization;
+  
+  if (!token) {
+    return next(new Error("Authentication error: No token provided"));
+  }
+
+  try {
+    const cleanToken = token.startsWith("Bearer ") ? token.split(" ")[1] : token;
+    const decoded = jwt.verify(cleanToken, process.env.JWT_SECRET);
+    socket.userId = decoded.id; // Attach user/admin id to socket session
+    next();
+  } catch (err) {
+    return next(new Error("Authentication error: Invalid token"));
+  }
+});
+
+io.on("connection", (socket) => {
+  console.log(`📱 Authenticated device connected: ${socket.id} (User: ${socket.userId})`);
+
+  // Admins/Owners will join a specific room named after their unique User ID
+  socket.on("join-dashboard", () => {
+    socket.join(`owner-room-${socket.userId}`);
+    console.log(`👤 Admin joined secure channel: owner-room-${socket.userId}`);
+  });
+
+  // Mobile phone transmits location data
+  socket.on("send-location", async (data) => {
+    const { bikeId, latitude, longitude } = data;
+
+    try {
+      // Find the bike to check who owns it
+      const bike = await mongoose.model("Bike").findById(bikeId);
+      if (!bike) return;
+
+      const ownerTargetRoom = `owner-room-${bike.ownerId.toString()}`;
+
+      // 🔥 Send the update ONLY to the specific room belonging to the bike's owner
+      io.to(ownerTargetRoom).emit("ride-tracked", {
+        bikeId,
+        latitude,
+        longitude,
+        updatedAt: new Date()
+      });
+    } catch (error) {
+      console.error("Error processing telemetry routing:", error);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log(`📱 Device disconnected: ${socket.id}`);
+  });
+});
+
 connectDB();
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+const PORT = process.env.PORT || 5009;
+
+// 🌐 SOCKET.IO INTEGRATION: Changed from app.listen to httpServer.listen
+httpServer.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 
 app.use((err, req, res, next) => {
   console.log("💥 FULL RAW ERROR OBJECT:", JSON.stringify(err, null, 2));

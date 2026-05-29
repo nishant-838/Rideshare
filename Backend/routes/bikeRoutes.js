@@ -1,5 +1,5 @@
 import express from "express";
-
+import multer from "multer"; // 🚀 Added to process raw binary file packets
 import {
   addBike,
   getAllBikes,
@@ -18,24 +18,24 @@ import {
 
 const router = express.Router();
 
-// OWNER ONLY
-router.post("/", protect, ownerOnly, addBike);
+// Configure memory buffers for multi-part forms
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+
+// 🚀 Pass upload.single("image") into the create and update route pathways
+router.post("/", protect, ownerOnly, upload.single("image"), addBike);
+router.put("/:id", protect, ownerOnly, upload.single("image"), updateBike);
 
 // PUBLIC
 router.get("/", getAllBikes);
-
 router.get("/available", getAvailableBikes);
-
 router.get("/:id", getBikeById);
 
-// OWNER ONLY
-router.put("/:id", protect, ownerOnly, updateBike);
-
+// OWNER ONLY REMOVAL
 router.delete("/:id", protect, ownerOnly, deleteBike);
 
 // AUTH REQUIRED
 router.post("/:id/rate", protect, rateBike);
-
 router.get("/:id/ratings", getBikeRatings);
 
 export default router;

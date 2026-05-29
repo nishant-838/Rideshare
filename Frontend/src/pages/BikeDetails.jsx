@@ -48,47 +48,48 @@ export default function BikeDetails() {
   }, [id]);
 
   //  Handle booking and trigger backend SMS
-  //  Handle booking and trigger backend SMS
-const handleBook = async () => {
-  try {
-    const storedUser = JSON.parse(localStorage.getItem("user"));
-    if (!storedUser?._id) return navigate("/login");
+  const handleBook = async () => {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem("user"));
+      if (!storedUser?._id) return navigate("/login");
 
-    const filters = JSON.parse(localStorage.getItem("searchFilters"));
-    if (!filters) return alert("Please select pickup and drop times!");
+      const filters = JSON.parse(localStorage.getItem("searchFilters"));
+      if (!filters) return alert("Please select pickup and drop times!");
 
-    //  FIX: get token before sending request
-    const token = localStorage.getItem("token"); 
-    if (!token) {
-      alert("You must be logged in to book a bike!");
-      return navigate("/login");
+      const token = localStorage.getItem("token"); 
+      if (!token) {
+        alert("You must be logged in to book a bike!");
+        return navigate("/login");
+      }
+
+      // 🌟 FIX: Parse local inputs into synchronized JavaScript Date boundaries
+      const localStart = new Date(`${filters.pickupDate}T${filters.pickupTime}`);
+      const localEnd = new Date(`${filters.pickupDate}T${filters.dropTime}`);
+
+      const bookingData = {
+        renterId: storedUser._id,
+        bikeId: id,
+        date: filters.pickupDate,
+        // 🌟 FIX: Send explicit, absolute ISO strings to protect database values from offsets
+        startTime: localStart.toISOString(),
+        endTime: localEnd.toISOString(),
+        totalAmount: total,
+        mobile: storedUser.mobile, 
+      };
+
+      const res = await api.post("/bookings", bookingData, {
+        headers: {
+          Authorization: `Bearer ${token}`, 
+        },
+      });
+
+      alert(res.data.message || " Bike booked successfully!");
+      navigate("/mybookings");
+    } catch (err) {
+      console.error("Booking error:", err.response?.data || err.message);
+      alert("Failed to book the bike. Please try again.");
     }
-
-    const bookingData = {
-      renterId: storedUser._id,
-      bikeId: id,
-      date: filters.pickupDate,
-      startTime: `${filters.pickupDate}T${filters.pickupTime}`,
-      endTime: `${filters.pickupDate}T${filters.dropTime}`,
-      totalAmount: total,
-      mobile: storedUser.mobile, // optional
-    };
-
-    const res = await api.post("/bookings", bookingData, {
-      headers: {
-        Authorization: `Bearer ${token}`, 
-      },
-    });
-
-    alert(res.data.message || " Bike booked successfully!");
-    navigate("/mybookings");
-  } catch (err) {
-    console.error("Booking error:", err.response?.data || err.message);
-    alert("Failed to book the bike. Please try again.");
-  }
-};
-
-
+  };
 
   //  Loading State
   if (loading)
@@ -120,7 +121,6 @@ const handleBook = async () => {
 
   const filters = JSON.parse(localStorage.getItem("searchFilters"));
 
-  //  Main UI
   return (
     <>
       <Navbar />

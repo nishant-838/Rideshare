@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom"; // 🔥 Added for navigation to /tracker
 import api from "../api/axios";
 import Navbar from "../components/navbar";
 import Footer from "../components/Footer";
@@ -9,6 +10,8 @@ export default function MyBookings() {
   const [error, setError] = useState("");
   const [ratingValue, setRatingValue] = useState({}); // temporary state while submitting
   const [submittingRating, setSubmittingRating] = useState(false);
+  
+  const navigate = useNavigate(); // 🔥 Hook initialized to switch routes safely
 
   // Fetch bookings on component mount
   useEffect(() => {
@@ -96,6 +99,16 @@ export default function MyBookings() {
     const isPastBooking = new Date(b.endTime) <= currentTime;
     const rated = b.userRating || ratingValue[b._id]; // backend rating or temp state
 
+    // 🏁 TRACKING EVALUATION LOGIC
+    const rideStartTime = new Date(b.startTime);
+    const rideEndTime = new Date(b.endTime);
+    
+    // Create a time window starting 15 minutes before the pickup time
+    const fifteenMinutesBefore = new Date(rideStartTime.getTime() - 15 * 60 * 1000);
+    
+    // Check if current system time falls between (Start - 15 mins) and (End Time)
+    const isStreamEligible = currentTime >= fifteenMinutesBefore && currentTime <= rideEndTime;
+
     return (
       <div
         key={b._id}
@@ -116,19 +129,43 @@ export default function MyBookings() {
           <div className="text-sm text-gray-500 mb-3">
             <p>
               <span className="font-medium text-gray-700">From:</span>{" "}
-              {new Date(b.startTime).toLocaleString()}
+              {new Date(b.startTime).toLocaleString("en-IN", {
+                day: "numeric",
+                month: "numeric",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true,
+              })}
             </p>
             <p>
               <span className="font-medium text-gray-700">To:</span>{" "}
-              {new Date(b.endTime).toLocaleString()}
+              {new Date(b.endTime).toLocaleString("en-IN", {
+                day: "numeric",
+                month: "numeric",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true,
+              })}
             </p>
           </div>
+
+          {/* --- 🚀 THE GO LIVE BUTTON (Appears 15 minutes before the ride starts) --- */}
+          {!isPastBooking && isStreamEligible && (
+            <button
+              onClick={() => navigate("/tracker", { state: { bookingId: b._id, bikeId: b.bikeId?._id } })}
+              className="w-full mb-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-2.5 rounded-xl font-bold animate-pulse hover:from-blue-700 hover:to-indigo-700 shadow-md transition duration-200"
+            >
+              🏁 Go Live (Start Stream)
+            </button>
+          )}
 
           {/* Cancel button for upcoming rides */}
           {!isPastBooking && (
             <button
               onClick={() => handleCancel(b._id, b.startTime)}
-              className="w-full mt-2 bg-red-500 text-white py-2 rounded-xl hover:bg-red-600 transition duration-200"
+              className="w-full mt-1 bg-red-500 text-white py-2 rounded-xl hover:bg-red-600 transition duration-200"
             >
               Cancel Booking
             </button>

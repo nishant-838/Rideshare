@@ -1,5 +1,6 @@
 import Bike from "../models/Bike.js";
 import Booking from "../models/Booking.js";
+import cloudinary from "../config/Cloudinary.js"; // 🚀 Imported to manage server assets
 
 // 🏍️ Add new bike
 export const addBike = async (req, res) => {
@@ -7,7 +8,6 @@ export const addBike = async (req, res) => {
     const {
       ownerId,
       bikeName,
-      image,
       pricePerHour,
       mileage,
       description,
@@ -15,14 +15,31 @@ export const addBike = async (req, res) => {
       vehicleType,
     } = req.body;
 
-    if (!ownerId || !bikeName || !image || !pricePerHour || !mileage || !description) {
+    // 🚀 Check if a physical file was transmitted via the form input
+    if (!req.file) {
+      return res.status(400).json({ message: "Please upload an image file for this vehicle." });
+    }
+
+    if (!ownerId || !bikeName || !pricePerHour || !mileage || !description) {
       return res.status(400).json({ message: "All required fields must be filled" });
     }
+
+    // 🚀 Stream the image buffer payload into your Cloudinary folder bucket
+    const uploadResult = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        { folder: "rideshare_bikes" },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      uploadStream.end(req.file.buffer);
+    });
 
     const bike = new Bike({
       ownerId,
       bikeName,
-      image,
+      image: uploadResult.secure_url, // 🔥 Assign the real Cloudinary URL string
       pricePerHour,
       mileage,
       description,
@@ -33,7 +50,7 @@ export const addBike = async (req, res) => {
         : [],
       vehicleType,
       available: true,
-      ratings: [], // initialize ratings array
+      ratings: [], 
     });
 
     await bike.save();
@@ -100,52 +117,43 @@ export const getBikeById = async (req, res) => {
 export const updateBike = async (req, res) => {
   try {
     const { id } = req.params;
-
-    const updateFields = req.body;
-
-    // FIND BIKE
+    const updateFields = { ...req.body };
     const bike = await Bike.findById(id);
 
     if (!bike) {
-      return res.status(404).json({
-        message: "Bike not found",
-      });
+      return res.status(404).json({ message: "Bike not found" });
     }
 
-    // OWNER CHECK
     if (bike.ownerId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        message: "Not authorized to update this bike",
+      return res.status(403).json({ message: "Not authorized to update this bike" });
+    }
+
+    // 🚀 If a new image file is chosen while updating, handle that buffer stream modification
+    if (req.file) {
+      const uploadResult = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          { folder: "rideshare_bikes" },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        );
+        uploadStream.end(req.file.buffer);
       });
+      updateFields.image = uploadResult.secure_url;
     }
 
-    // TAG PARSING
-    if (
-      updateFields.tags &&
-      typeof updateFields.tags === "string"
-    ) {
-      updateFields.tags = updateFields.tags
-        .split(",")
-        .map((t) => t.trim());
+    if (updateFields.tags && typeof updateFields.tags === "string") {
+      updateFields.tags = updateFields.tags.split(",").map((t) => t.trim());
     }
 
-    // UPDATE
     Object.assign(bike, updateFields);
-
     await bike.save();
 
-    res.json({
-      success: true,
-      message: "Bike updated successfully",
-      bike,
-    });
+    res.json({ success: true, message: "Bike updated successfully", bike });
   } catch (error) {
     console.error("UPDATE BIKE ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to update bike",
-    });
+    res.status(500).json({ success: false, message: "Failed to update bike" });
   }
 };
 
@@ -153,50 +161,35 @@ export const updateBike = async (req, res) => {
 export const deleteBike = async (req, res) => {
   try {
     const { id } = req.params;
-
     const bike = await Bike.findById(id);
 
     if (!bike) {
-      return res.status(404).json({
-        message: "Bike not found",
-      });
+      return res.status(404).json({ message: "Bike not found" });
     }
 
-    // OWNER VALIDATION
     if (bike.ownerId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        message: "Not authorized to delete this bike",
-      });
+      return res.status(403).json({ message: "Not authorized to delete this bike" });
     }
 
     await bike.deleteOne();
-
-    res.json({
-      success: true,
-      message: "Bike deleted successfully",
-    });
+    res.json({ success: true, message: "Bike deleted successfully" });
   } catch (error) {
     console.error("DELETE BIKE ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to delete bike",
-    });
+    res.status(500).json({ success: false, message: "Failed to delete bike" });
   }
 };
 
-// ⭐ Rate a bike (user can rate only if they completed a booking)
+// ⭐ Rate a bike
 export const rateBike = async (req, res) => {
   try {
     const { id } = req.params;
     const { rating } = req.body;
-    const userId = req.user._id; // protect middleware sets req.user
+    const userId = req.user._id;
 
     if (!rating || rating < 1 || rating > 5) {
       return res.status(400).json({ message: "Rating must be between 1 and 5" });
     }
 
-    // Check if user had a past booking
     const pastBooking = await Booking.findOne({
       bikeId: id,
       renterId: userId,
@@ -210,18 +203,13 @@ export const rateBike = async (req, res) => {
     const bike = await Bike.findById(id);
     if (!bike) return res.status(404).json({ message: "Bike not found" });
 
-    // Remove previous rating by same user
     bike.ratings = bike.ratings.filter((r) => r.userId.toString() !== userId.toString());
-
-    // Add new rating
     bike.ratings.push({ userId, value: rating });
 
-    // Calculate average rating
     const total = bike.ratings.reduce((sum, r) => sum + r.value, 0);
     bike.avgRating = total / bike.ratings.length;
 
     await bike.save();
-
     res.json({ message: "✅ Rating submitted", avgRating: bike.avgRating });
   } catch (error) {
     console.error("RATE BIKE ERROR:", error);
@@ -229,7 +217,7 @@ export const rateBike = async (req, res) => {
   }
 };
 
-// 🔍 Get bike ratings (avg + all ratings)
+// 🔍 Get bike ratings
 export const getBikeRatings = async (req, res) => {
   try {
     const bike = await Bike.findById(req.params.id).populate("ratings.userId", "name");

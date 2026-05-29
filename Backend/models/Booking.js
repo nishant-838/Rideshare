@@ -12,6 +12,7 @@ const bookingSchema = new mongoose.Schema({
   //   enum: ["pending", "paid"],
   //   default: "pending",
   // },
+  reminderSent: { type: Boolean, default: false },
 }, { timestamps: true });
 
 export default mongoose.model("Booking", bookingSchema);
