@@ -1,6 +1,6 @@
 import Bike from "../models/Bike.js";
 import Booking from "../models/Booking.js";
-import cloudinary from "../config/Cloudinary.js"; // 🚀 Imported to manage server assets
+import cloudinary from "../config/cloudinary.js"; // 🚀 Imported to manage server assets
 
 // 🏍️ Add new bike
 export const addBike = async (req, res) => {
